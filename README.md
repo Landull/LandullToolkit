@@ -45,7 +45,7 @@ Building needs Python 3.9+.
 - **Linux:** run `./build_linux.sh`.
 - **Run from source:** `pip install PySide6-Essentials`, then `python3 landull_toolkit.py`.
 
-Pushing a tag such as `v1.0.1` makes GitHub Actions build all three versions, test them, and publish a release.
+To ship a new version, publish a release on GitHub with a new tag such as `v1.0.1`. GitHub Actions then builds all three versions, tests them, and attaches the downloads to that release.
 
 ## Notes
 
