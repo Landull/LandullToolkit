@@ -1,0 +1,11 @@
+.venv/
+build/
+dist/
+*.spec
+build.log
+*.log
+__pycache__/
+.DS_Store
+.update.zip
+.source.zip
+.test-*

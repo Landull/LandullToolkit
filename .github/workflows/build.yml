@@ -1,0 +1,76 @@
+name: build
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          sed -i '' 's/^open -R.*//' "Build Mac App.command"
+          bash "Build Mac App.command" </dev/null
+          "dist/Landull Toolkit.app/Contents/MacOS/Landull Toolkit" --run-tool hashcheck -a sha256 README.md | tee smoke.txt
+          grep -q SHA256 smoke.txt
+          cd dist && ditto -c -k --keepParent "Landull Toolkit.app" LandullToolkit-macOS.zip
+
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: echo.| build_windows.bat
+      - name: Smoke test + package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath dist\LandullToolkit\LandullToolkit.exe -ArgumentList "--run-tool","hashcheck","-a","sha256","README.md" -RedirectStandardOutput smoke.txt -RedirectStandardError smoke_err.txt -NoNewWindow -Wait -PassThru
+          Get-Content smoke.txt; Get-Content smoke_err.txt
+          if (-not (Select-String -Path smoke.txt -Pattern "SHA256" -Quiet)) { exit 1 }
+          Compress-Archive -Path dist\LandullToolkit -DestinationPath dist\LandullToolkit-Windows.zip
+
+      - name: Build (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update && sudo apt-get install -y libegl1 libxkbcommon-x11-0 libxcb-cursor0
+          bash build_linux.sh
+          dist/LandullToolkit/LandullToolkit --run-tool hashcheck -a sha256 README.md | tee smoke.txt
+          grep -q SHA256 smoke.txt
+          cd dist && tar czf LandullToolkit-Linux.tar.gz LandullToolkit
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LandullToolkit-${{ runner.os }}
+          path: |
+            dist/LandullToolkit-*.zip
+            dist/LandullToolkit-*.tar.gz
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: out/*
+          body: |
+            Desktop app for all 18 Landull tools (forensickit, auditkit, scankit).
+
+            **Download:** macOS (Apple Silicon) `LandullToolkit-macOS.zip` · Windows `LandullToolkit-Windows.zip` · Linux `LandullToolkit-Linux.tar.gz`
+
+            The app isn't code-signed, so your OS will warn the first time. See the README for the one-time "open anyway" step.
